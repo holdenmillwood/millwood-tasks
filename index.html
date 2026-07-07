@@ -112,13 +112,13 @@
 
   async function fetchCompletedToday() {
     try {
-      const since = today + 'T00:00:00', until = today + 'T23:59:59';
-      const res = await fetch(WORKER_URL + '/sync/v1/items/completed/get_all?project_id=' + PROJECT_ID + '&since=' + encodeURIComponent(since) + '&until=' + encodeURIComponent(until) + '&limit=200');
+      const since = today + 'T00:00:00';
+      const res = await fetch(WORKER_URL + '/api/v1/tasks/completed?project_id=' + PROJECT_ID + '&since=' + encodeURIComponent(since) + '&limit=200');
       if (!res.ok) return {};
       const data = await res.json();
       const counts = {};
       (data.items || []).forEach(item => {
-        const uid = String(item.responsible_uid || item.user_id || '');
+        const uid = String(item.user_id || '');
         if (uid) counts[uid] = (counts[uid] || 0) + 1;
       });
       return counts;
