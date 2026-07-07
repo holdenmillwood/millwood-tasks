@@ -62,6 +62,19 @@
     .assign-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     .empty { padding: 18px 14px; font-size: 12px; color: var(--muted); text-align: center; }
     .section-divider { padding: 6px 12px 4px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; border-top: 1px solid var(--border); margin-top: 4px; }
+    .stat-card.clickable { cursor: pointer; transition: background .15s; }
+    .stat-card.clickable:hover { background: var(--card2); }
+    .stat-popup { position: fixed; z-index: 300; background: #1e2130; border: 1px solid var(--border); border-radius: 12px; min-width: 280px; max-width: 360px; max-height: 420px; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,.6); padding: 6px 0; }
+    .stat-popup::-webkit-scrollbar { width: 4px; }
+    .stat-popup::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .stat-popup-item { padding: 9px 14px; display: flex; align-items: flex-start; gap: 10px; border-radius: 7px; margin: 0 4px; }
+    .stat-popup-item:hover { background: rgba(255,255,255,.04); }
+    .stat-popup-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+    .stat-popup-text { flex: 1; min-width: 0; }
+    .stat-popup-name { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+    .stat-popup-content { font-size: 12px; line-height: 1.4; word-break: break-word; }
+    .stat-popup-due { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .stat-popup-empty { padding: 16px 14px; font-size: 12px; color: var(--muted); text-align: center; }
     .loading-wrap { display: flex; flex-direction: column; align-items: center; padding: 80px 0; color: var(--muted); gap: 14px; }
     .spinner { width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .75s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -114,15 +127,16 @@
     try {
       const since = today + 'T00:00:00';
       const res = await fetch(WORKER_URL + '/api/v1/tasks/completed?project_id=' + PROJECT_ID + '&since=' + encodeURIComponent(since) + '&annotate_items=true&limit=200');
-      if (!res.ok) return {};
+      if (!res.ok) return { counts: {}, items: [] };
       const data = await res.json();
-      const counts = {};
+      const counts = {}, items = [];
       (data.items || []).forEach(item => {
         const uid = String(item.item_object?.responsible_uid || item.user_id || '');
         if (uid) counts[uid] = (counts[uid] || 0) + 1;
+        items.push({ content: item.content, uid, completed_at: item.completed_at });
       });
-      return counts;
-    } catch { return {}; }
+      return { counts, items };
+    } catch { return { counts: {}, items: [] }; }
   }
 
   function isOverdue(t) { return t.due && t.due.date < today; }
@@ -140,8 +154,42 @@
   }
   function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+  let _statData = { overdue: [], today: [], completed: [] };
+
   let activeDropdown = null;
   document.addEventListener('click', () => { if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; } });
+
+  function openStatPopup(type, cardEl) {
+    if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; return; }
+    const tasks = _statData[type] || [];
+    const dd = document.createElement('div');
+    dd.className = 'stat-popup';
+    dd.addEventListener('click', e => e.stopPropagation());
+    if (!tasks.length) {
+      dd.innerHTML = '<div class="stat-popup-empty">Nothing here</div>';
+    } else {
+      tasks.forEach(t => {
+        const user = USERS[t.uid];
+        const color = user ? user.color : '#555';
+        const name  = user ? user.name  : 'Unassigned';
+        const item  = document.createElement('div');
+        item.className = 'stat-popup-item';
+        item.innerHTML =
+          '<div class="stat-popup-dot" style="background:' + color + '"></div>' +
+          '<div class="stat-popup-text">' +
+            '<div class="stat-popup-name">' + esc(name) + '</div>' +
+            '<div class="stat-popup-content">' + esc(t.content) + '</div>' +
+            (t.due ? '<div class="stat-popup-due">' + t.due + '</div>' : '') +
+          '</div>';
+        dd.appendChild(item);
+      });
+    }
+    const rect = cardEl.getBoundingClientRect();
+    dd.style.top  = (rect.bottom + 6) + 'px';
+    dd.style.left = Math.min(rect.left, window.innerWidth - 370) + 'px';
+    document.body.appendChild(dd);
+    activeDropdown = dd;
+  }
 
   function openAssignDropdown(taskId, btnEl) {
     if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; return; }
@@ -218,20 +266,25 @@
     document.getElementById('content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><div>Loading tasks…</div></div>';
     document.getElementById('statsRow').style.display = 'none';
     try {
-      const [allTasks, completedToday] = await Promise.all([
+      const [allTasks, { counts: completedToday, items: completedItems }] = await Promise.all([
         fetchAllTasks(),
         fetchCompletedToday()
       ]);
       const overdueTotal = allTasks.filter(isOverdue).length;
       const todayTotal   = allTasks.filter(isToday).length;
       const doneTotal    = Object.values(completedToday).reduce((a,b)=>a+b,0);
+
+      _statData.overdue   = allTasks.filter(isOverdue).map(t => ({ content: t.content, uid: String(t.responsible_uid||''), due: '⚠ Overdue · ' + formatDue(t) }));
+      _statData.today     = allTasks.filter(isToday).map(t =>   ({ content: t.content, uid: String(t.responsible_uid||''), due: '📅 Due today' }));
+      _statData.completed = completedItems.map(t => ({ content: t.content, uid: t.uid, due: '' }));
+
       const sr = document.getElementById('statsRow');
       sr.style.display = 'flex';
       sr.innerHTML =
         '<div class="stat-card"><div class="stat-label">Active Tasks</div><div class="stat-value">' + allTasks.length + '</div></div>' +
-        '<div class="stat-card"><div class="stat-label">Overdue</div><div class="stat-value danger">' + overdueTotal + '</div></div>' +
-        '<div class="stat-card"><div class="stat-label">Due Today</div><div class="stat-value today-v">' + todayTotal + '</div></div>' +
-        '<div class="stat-card"><div class="stat-label">Completed Today</div><div class="stat-value done-v">' + doneTotal + '</div></div>';
+        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup('overdue',this)"><div class="stat-label">Overdue ▾</div><div class="stat-value danger">' + overdueTotal + '</div></div>' +
+        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup('today',this)"><div class="stat-label">Due Today ▾</div><div class="stat-value today-v">' + todayTotal + '</div></div>' +
+        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup('completed',this)"><div class="stat-label">Completed Today ▾</div><div class="stat-value done-v">' + doneTotal + '</div></div>';
       const byUser = {}, unassigned = [];
       allTasks.forEach(t => {
         const uid = String(t.responsible_uid || '');
@@ -283,6 +336,7 @@
 
   window.completeTask = completeTask;
   window.openAssignDropdown = openAssignDropdown;
+  window.openStatPopup = openStatPopup;
   loadData();
   setInterval(loadData, 30000);
 </script>
