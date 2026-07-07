@@ -77,19 +77,20 @@
 </head>
 <body>
 <div class="header">
-  <h1>ð Team Task Dashboard</h1>
+  <h1>🗂 Team Task Dashboard</h1>
   <div class="header-right">
     <span class="last-updated" id="lastUpdated"></span>
-    <button class="refresh-btn" onclick="loadData()">â» Refresh</button>
+    <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
   </div>
 </div>
 <div id="statsRow" class="stats-row" style="display:none"></div>
 <div id="content">
-  <div class="loading-wrap"><div class="spinner"></div><div>Loading tasksâ¦</div></div>
+  <div class="loading-wrap"><div class="spinner"></div><div>Loading tasks…</div></div>
 </div>
 <script>
-  const TOKEN      = '3f33684cf0f6af78723172773aa5a92910eaf9b8';
-  const PROJECT_ID = '6CrfXx4WRMGprc78';
+  // After deploying the Cloudflare Worker, paste its URL here:
+  const WORKER_URL   = 'https://bold-lake-3329.holden-a49.workers.dev';
+  const PROJECT_ID   = '6CrfXx4WRMGprc78';
   const USERS = {
     '40811159': { name: 'Holden Gilstrap',  initials: 'HG',  color: '#f72585' },
     '49999808': { name: 'Jared Childs',     initials: 'JC',  color: '#0096c7' },
@@ -100,9 +101,9 @@
   const today = new Date().toISOString().split('T')[0];
 
   async function restApi(method, path, body) {
-    const opts = { method, headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' } };
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (body) opts.body = JSON.stringify(body);
-    const res = await fetch('https://api.todoist.com/rest/v2' + path, opts);
+    const res = await fetch(WORKER_URL + '/rest/v2' + path, opts);
     if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
     if (res.status === 204) return null;
     return res.json();
@@ -111,7 +112,7 @@
   async function fetchCompletedToday() {
     try {
       const since = today + 'T00:00:00', until = today + 'T23:59:59';
-      const res = await fetch('https://api.todoist.com/sync/v9/items/completed/get_all?project_id=' + PROJECT_ID + '&since=' + encodeURIComponent(since) + '&until=' + encodeURIComponent(until) + '&limit=200', { headers: { 'Authorization': 'Bearer ' + TOKEN } });
+      const res = await fetch(WORKER_URL + '/sync/v9/items/completed/get_all?project_id=' + PROJECT_ID + '&since=' + encodeURIComponent(since) + '&until=' + encodeURIComponent(until) + '&limit=200');
       if (!res.ok) return {};
       const data = await res.json();
       const counts = {};
@@ -189,19 +190,19 @@
     const over = isOverdue(t), tod = isToday(t), due = formatDue(t);
     const user = USERS[String(t.assignee_id || '')];
     return '<div class="task-item ' + (over?'is-overdue':'') + ' ' + (tod?'is-today':'') + '" id="ti-' + t.id + '">' +
-      '<div class="task-check" onclick="event.stopPropagation();completeTask(\'' + t.id + '\')" title="Complete">â</div>' +
+      '<div class="task-check" onclick="event.stopPropagation();completeTask(\'' + t.id + '\')" title="Complete">✓</div>' +
       '<div class="task-body">' +
         '<div class="task-content">' + esc(t.content) + '</div>' +
         '<div class="task-meta">' +
-          (due ? '<span class="task-due">' + (over?'â  ':tod?'ð ':'') + due + '</span>' : '') +
+          (due ? '<span class="task-due">' + (over?'⚠ ':tod?'📅 ':'') + due + '</span>' : '') +
           priorityBadge(t.priority) +
-          '<button class="assign-btn" onclick="event.stopPropagation();openAssignDropdown(\'' + t.id + '\',this)">' + esc(user?user.initials:'Assign') + ' â¾</button>' +
+          '<button class="assign-btn" onclick="event.stopPropagation();openAssignDropdown(\'' + t.id + '\',this)">' + esc(user?user.initials:'Assign') + ' ▾</button>' +
         '</div>' +
       '</div></div>';
   }
 
   async function loadData() {
-    document.getElementById('content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><div>Loading tasksâ¦</div></div>';
+    document.getElementById('content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><div>Loading tasks…</div></div>';
     document.getElementById('statsRow').style.display = 'none';
     try {
       const [tasks, completedToday] = await Promise.all([
@@ -241,7 +242,7 @@
             (uT?'<span class="badge today">'+uT+' today</span>':'') +
             (uD?'<span class="badge done">'+uD+' done</span>':'') +
             '</div></div></div>' +
-          '<div class="task-list">' + (tasks.length ? tasks.map(renderTask).join('') : '<div class="empty">No active tasks ð</div>') + '</div></div>';
+          '<div class="task-list">' + (tasks.length ? tasks.map(renderTask).join('') : '<div class="empty">No active tasks 🎉</div>') + '</div></div>';
       });
       if (unassigned.length) {
         html += '<div class="person-card">' +
@@ -253,7 +254,7 @@
       document.getElementById('content').innerHTML = html;
       document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     } catch(e) {
-      document.getElementById('content').innerHTML = '<div class="error-box"><strong>â  Could not load tasks</strong><br>' + esc(e.message) + '</div>';
+      document.getElementById('content').innerHTML = '<div class="error-box"><strong>⚠ Could not load tasks</strong><br>' + esc(e.message) + '</div>';
     }
   }
 
