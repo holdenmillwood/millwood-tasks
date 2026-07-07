@@ -103,7 +103,7 @@
   async function restApi(method, path, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(WORKER_URL + '/rest/v2' + path, opts);
+    const res = await fetch(WORKER_URL + '/api/v1' + path, opts);
     if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
     if (res.status === 204) return null;
     return res.json();
@@ -112,7 +112,7 @@
   async function fetchCompletedToday() {
     try {
       const since = today + 'T00:00:00', until = today + 'T23:59:59';
-      const res = await fetch(WORKER_URL + '/sync/v9/items/completed/get_all?project_id=' + PROJECT_ID + '&since=' + encodeURIComponent(since) + '&until=' + encodeURIComponent(until) + '&limit=200');
+      const res = await fetch(WORKER_URL + '/sync/v1/items/completed/get_all?project_id=' + PROJECT_ID + '&since=' + encodeURIComponent(since) + '&until=' + encodeURIComponent(until) + '&limit=200');
       if (!res.ok) return {};
       const data = await res.json();
       const counts = {};
