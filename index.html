@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Task Dashboard</title>
+  <style>
+    :root {
+      --bg: #0f1117; --card: #1a1d27; --card2: #1f2235; --border: #2a2d3e;
+      --text: #e8eaf0; --muted: #7b80a0; --danger: #ff4757; --success: #2ed573;
+      --today-col: #ffa502; --accent: #7c6af7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+    .header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--card); position: sticky; top: 0; z-index: 50; }
+    .header h1 { font-size: 17px; font-weight: 700; }
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .last-updated { font-size: 11px; color: var(--muted); }
+    .refresh-btn { background: var(--card2); border: 1px solid var(--border); color: var(--text); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: background .15s; }
+    .refresh-btn:hover { background: var(--border); }
+    .stats-row { display: flex; gap: 12px; padding: 20px 24px 12px; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; flex: 1; }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; }
+    .stat-value { font-size: 28px; font-weight: 700; line-height: 1; }
+    .stat-value.danger { color: var(--danger); }
+    .stat-value.today-v { color: var(--today-col); }
+    .stat-value.done-v { color: var(--success); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; padding: 8px 24px 32px; }
+    .person-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+    .person-header { padding: 13px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); background: var(--card2); }
+    .avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: white; flex-shrink: 0; }
+    .person-name { font-size: 14px; font-weight: 600; }
+    .person-stats { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+    .badge { font-size: 11px; padding: 2px 7px; border-radius: 20px; background: rgba(255,255,255,.06); color: var(--muted); }
+    .badge.overdue { background: rgba(255,71,87,.15); color: var(--danger); }
+    .badge.today { background: rgba(255,165,2,.15); color: var(--today-col); }
+    .badge.done { background: rgba(46,213,115,.15); color: var(--success); }
+    .task-list { padding: 6px 0; max-height: 400px; overflow-y: auto; flex: 1; }
+    .task-list::-webkit-scrollbar { width: 4px; }
+    .task-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .task-item { padding: 8px 12px; display: flex; align-items: flex-start; gap: 10px; margin: 0 4px 1px; border-radius: 7px; transition: background .12s, opacity .2s; }
+    .task-item:hover { background: rgba(255,255,255,.04); }
+    .task-item.completing { opacity: .3; pointer-events: none; }
+    .task-check { width: 17px; height: 17px; border: 1.5px solid var(--border); border-radius: 50%; cursor: pointer; flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center; transition: border-color .15s, background .15s; color: transparent; font-size: 10px; }
+    .task-check:hover { border-color: var(--success); background: rgba(46,213,115,.15); color: var(--success); }
+    .task-body { flex: 1; min-width: 0; }
+    .task-content { font-size: 13px; line-height: 1.45; word-break: break-word; }
+    .task-item.is-overdue .task-content { color: #ff8a94; }
+    .task-meta { display: flex; gap: 6px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+    .task-due { font-size: 11px; color: var(--muted); }
+    .task-item.is-overdue .task-due { color: var(--danger); }
+    .task-item.is-today .task-due { color: var(--today-col); }
+    .task-priority { font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 700; }
+    .p1 { background: rgba(255,71,87,.18); color: #ff4757; }
+    .p2 { background: rgba(255,165,2,.18); color: #ffa502; }
+    .p3 { background: rgba(30,144,255,.18); color: #1e90ff; }
+    .assign-btn { font-size: 11px; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; cursor: pointer; white-space: nowrap; transition: color .12s, border-color .12s; }
+    .assign-btn:hover { color: var(--text); border-color: var(--muted); }
+    .assign-dropdown { position: fixed; background: #252839; border: 1px solid var(--border); border-radius: 9px; padding: 5px; z-index: 200; min-width: 170px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+    .assign-option { padding: 7px 10px; font-size: 12px; cursor: pointer; border-radius: 5px; display: flex; align-items: center; gap: 9px; color: var(--text); }
+    .assign-option:hover { background: rgba(255,255,255,.07); }
+    .assign-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .empty { padding: 18px 14px; font-size: 12px; color: var(--muted); text-align: center; }
+    .loading-wrap { display: flex; flex-direction: column; align-items: center; padding: 80px 0; color: var(--muted); gap: 14px; }
+    .spinner { width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .75s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-box { background: rgba(255,71,87,.08); border: 1px solid rgba(255,71,87,.3); border-radius: 10px; padding: 14px 18px; color: var(--danger); font-size: 13px; margin: 20px 24px; }
+    @media (max-width: 600px) {
+      .stats-row { flex-wrap: wrap; padding: 12px; gap: 8px; }
+      .stat-card { min-width: calc(50% - 4px); flex: none; padding: 10px 14px; }
+      .stat-value { font-size: 22px; }
+      .grid { grid-template-columns: 1fr; padding: 8px 12px 24px; gap: 12px; }
+      .header { padding: 14px 16px; }
+      .header h1 { font-size: 15px; }
+    }
+  </style>
+</head>
+<body>
+<div class="header">
+  <h1>ð Team Task Dashboard</h1>
+  <div class="header-right">
+    <span class="last-updated" id="lastUpdated"></span>
+    <button class="refresh-btn" onclick="loadData()">â» Refresh</button>
+  </div>
+</div>
+<div id="statsRow" class="stats-row" style="display:none"></div>
+<div id="content">
+  <div class="loading-wrap"><div class="spinner"></div><div>Loading tasksâ¦</div></div>
+</div>
+<script>
+  const TOKEN      = '3f33684cf0f6af78723172773aa5a92910eaf9b8';
+  const PROJECT_ID = '6CrfXx4WRMGprc78';
+  const USERS = {
+    '40811159': { name: 'Holden Gilstrap',  initials: 'HG',  color: '#f72585' },
+    '49999808': { name: 'Jared Childs',     initials: 'JC',  color: '#0096c7' },
+    '30286439': { name: 'Craig Haynie',     initials: 'CH',  color: '#4361ee' },
+    '30286518': { name: 'Christin Haynie',  initials: 'CH2', color: '#7209b7' },
+    '59142744': { name: 'Sam',              initials: 'SA',  color: '#06b880' },
+  };
+  const today = new Date().toISOString().split('T')[0];
+
+  async function restApi(method, path, body) {
+    const opts = { method, headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch('https://api.todoist.com/rest/v2' + path, opts);
+    if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+    if (res.status === 204) return null;
+    return res.json();
+  }
+
+  async function fetchCompletedToday() {
+    try {
+      const since = today + 'T00:00:00', until = today + 'T23:59:59';
+      const res = await fetch('https://api.todoist.com/sync/v9/items/completed/get_all?project_id=' + PROJECT_ID + '&since=' + encodeURIComponent(since) + '&until=' + encodeURIComponent(until) + '&limit=200', { headers: { 'Authorization': 'Bearer ' + TOKEN } });
+      if (!res.ok) return {};
+      const data = await res.json();
+      const counts = {};
+      (data.items || []).forEach(item => {
+        const uid = String(item.responsible_uid || item.user_id || '');
+        if (uid) counts[uid] = (counts[uid] || 0) + 1;
+      });
+      return counts;
+    } catch { return {}; }
+  }
+
+  function isOverdue(t) { return t.due && t.due.date < today; }
+  function isToday(t)   { return t.due && t.due.date === today; }
+  function formatDue(t) {
+    if (!t.due) return '';
+    const [y,m,d] = t.due.date.split('-').map(Number);
+    return new Date(y,m-1,d).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  }
+  function priorityBadge(p) {
+    if (p===4) return '<span class="task-priority p1">P1</span>';
+    if (p===3) return '<span class="task-priority p2">P2</span>';
+    if (p===2) return '<span class="task-priority p3">P3</span>';
+    return '';
+  }
+  function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  let activeDropdown = null;
+  document.addEventListener('click', () => { if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; } });
+
+  function openAssignDropdown(taskId, btnEl) {
+    if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; return; }
+    const dd = document.createElement('div');
+    dd.className = 'assign-dropdown';
+    dd.addEventListener('click', e => e.stopPropagation());
+    const rect = btnEl.getBoundingClientRect();
+    dd.style.top  = Math.min(rect.bottom + 4, window.innerHeight - 220) + 'px';
+    dd.style.left = rect.left + 'px';
+    const unassign = document.createElement('div');
+    unassign.className = 'assign-option';
+    unassign.innerHTML = '<span class="assign-dot" style="background:#555"></span> Unassign';
+    unassign.onclick = () => doAssign(taskId, null);
+    dd.appendChild(unassign);
+    Object.entries(USERS).forEach(([uid, u]) => {
+      const opt = document.createElement('div');
+      opt.className = 'assign-option';
+      opt.innerHTML = '<span class="assign-dot" style="background:' + u.color + '"></span> ' + u.name;
+      opt.onclick = () => doAssign(taskId, uid);
+      dd.appendChild(opt);
+    });
+    document.body.appendChild(dd);
+    activeDropdown = dd;
+  }
+
+  async function doAssign(taskId, userId) {
+    if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; }
+    try {
+      await restApi('POST', '/tasks/' + taskId, { assignee_id: userId ? parseInt(userId) : null });
+      loadData();
+    } catch(e) { alert('Could not assign: ' + e.message); }
+  }
+
+  async function completeTask(taskId) {
+    const el = document.getElementById('ti-' + taskId);
+    if (el) el.classList.add('completing');
+    try {
+      await restApi('POST', '/tasks/' + taskId + '/close');
+      if (el) el.remove();
+    } catch(e) {
+      if (el) el.classList.remove('completing');
+      alert('Could not complete: ' + e.message);
+    }
+  }
+
+  function renderTask(t) {
+    const over = isOverdue(t), tod = isToday(t), due = formatDue(t);
+    const user = USERS[String(t.assignee_id || '')];
+    return '<div class="task-item ' + (over?'is-overdue':'') + ' ' + (tod?'is-today':'') + '" id="ti-' + t.id + '">' +
+      '<div class="task-check" onclick="event.stopPropagation();completeTask(\'' + t.id + '\')" title="Complete">â</div>' +
+      '<div class="task-body">' +
+        '<div class="task-content">' + esc(t.content) + '</div>' +
+        '<div class="task-meta">' +
+          (due ? '<span class="task-due">' + (over?'â  ':tod?'ð ':'') + due + '</span>' : '') +
+          priorityBadge(t.priority) +
+          '<button class="assign-btn" onclick="event.stopPropagation();openAssignDropdown(\'' + t.id + '\',this)">' + esc(user?user.initials:'Assign') + ' â¾</button>' +
+        '</div>' +
+      '</div></div>';
+  }
+
+  async function loadData() {
+    document.getElementById('content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><div>Loading tasksâ¦</div></div>';
+    document.getElementById('statsRow').style.display = 'none';
+    try {
+      const [tasks, completedToday] = await Promise.all([
+        restApi('GET', '/tasks?project_id=' + PROJECT_ID),
+        fetchCompletedToday()
+      ]);
+      const allTasks = tasks || [];
+      const overdueTotal = allTasks.filter(isOverdue).length;
+      const todayTotal   = allTasks.filter(isToday).length;
+      const doneTotal    = Object.values(completedToday).reduce((a,b)=>a+b,0);
+      const sr = document.getElementById('statsRow');
+      sr.style.display = 'flex';
+      sr.innerHTML =
+        '<div class="stat-card"><div class="stat-label">Active Tasks</div><div class="stat-value">' + allTasks.length + '</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Overdue</div><div class="stat-value danger">' + overdueTotal + '</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Due Today</div><div class="stat-value today-v">' + todayTotal + '</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Completed Today</div><div class="stat-value done-v">' + doneTotal + '</div></div>';
+      const byUser = {}, unassigned = [];
+      allTasks.forEach(t => {
+        const uid = String(t.assignee_id || '');
+        if (uid && USERS[uid]) { if (!byUser[uid]) byUser[uid]=[]; byUser[uid].push(t); }
+        else unassigned.push(t);
+      });
+      let html = '<div class="grid">';
+      Object.entries(USERS).forEach(([uid, u]) => {
+        const tasks = (byUser[uid]||[]).sort((a,b) => {
+          const ao=isOverdue(a),bo=isOverdue(b),at=isToday(a),bt=isToday(b);
+          if(ao!==bo) return ao?-1:1; if(at!==bt) return at?-1:1; return b.priority-a.priority;
+        });
+        const uO=tasks.filter(isOverdue).length, uT=tasks.filter(isToday).length, uD=completedToday[uid]||0;
+        html += '<div class="person-card">' +
+          '<div class="person-header">' +
+            '<div class="avatar" style="background:' + u.color + '">' + u.initials + '</div>' +
+            '<div><div class="person-name">' + u.name + '</div>' +
+            '<div class="person-stats"><span class="badge">' + tasks.length + ' tasks</span>' +
+            (uO?'<span class="badge overdue">'+uO+' overdue</span>':'') +
+            (uT?'<span class="badge today">'+uT+' today</span>':'') +
+            (uD?'<span class="badge done">'+uD+' done</span>':'') +
+            '</div></div></div>' +
+          '<div class="task-list">' + (tasks.length ? tasks.map(renderTask).join('') : '<div class="empty">No active tasks ð</div>') + '</div></div>';
+      });
+      if (unassigned.length) {
+        html += '<div class="person-card">' +
+          '<div class="person-header"><div class="avatar" style="background:#444">?</div>' +
+          '<div><div class="person-name">Unassigned</div><div class="person-stats"><span class="badge">' + unassigned.length + ' tasks</span></div></div></div>' +
+          '<div class="task-list">' + unassigned.map(renderTask).join('') + '</div></div>';
+      }
+      html += '</div>';
+      document.getElementById('content').innerHTML = html;
+      document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    } catch(e) {
+      document.getElementById('content').innerHTML = '<div class="error-box"><strong>â  Could not load tasks</strong><br>' + esc(e.message) + '</div>';
+    }
+  }
+
+  window.completeTask = completeTask;
+  window.openAssignDropdown = openAssignDropdown;
+  loadData();
+</script>
+</body>
+</html>
