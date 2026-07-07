@@ -209,7 +209,7 @@
         restApi('GET', '/tasks?project_id=' + PROJECT_ID),
         fetchCompletedToday()
       ]);
-      const allTasks = tasks || [];
+      const allTasks = (tasks?.results ?? tasks) || [];
       const overdueTotal = allTasks.filter(isOverdue).length;
       const todayTotal   = allTasks.filter(isToday).length;
       const doneTotal    = Object.values(completedToday).reduce((a,b)=>a+b,0);
