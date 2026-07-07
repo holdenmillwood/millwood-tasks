@@ -61,6 +61,7 @@
     .assign-option:hover { background: rgba(255,255,255,.07); }
     .assign-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     .empty { padding: 18px 14px; font-size: 12px; color: var(--muted); text-align: center; }
+    .section-divider { padding: 6px 12px 4px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; border-top: 1px solid var(--border); margin-top: 4px; }
     .loading-wrap { display: flex; flex-direction: column; align-items: center; padding: 80px 0; color: var(--muted); gap: 14px; }
     .spinner { width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .75s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -239,21 +240,32 @@
       });
       let html = '<div class="grid">';
       Object.entries(USERS).forEach(([uid, u]) => {
-        const tasks = (byUser[uid]||[]).sort((a,b) => {
+        const sortFn = (a,b) => {
           const ao=isOverdue(a),bo=isOverdue(b),at=isToday(a),bt=isToday(b);
           if(ao!==bo) return ao?-1:1; if(at!==bt) return at?-1:1; return b.priority-a.priority;
-        });
-        const uO=tasks.filter(isOverdue).length, uT=tasks.filter(isToday).length, uD=completedToday[uid]||0;
+        };
+        const allU = (byUser[uid]||[]);
+        const regular   = allU.filter(t => !t.due?.is_recurring).sort(sortFn);
+        const recurring = allU.filter(t =>  t.due?.is_recurring).sort(sortFn);
+        const uO=allU.filter(isOverdue).length, uT=allU.filter(isToday).length, uD=completedToday[uid]||0;
+        let taskBody = '';
+        if (!allU.length) {
+          taskBody = '<div class="empty">No active tasks 🎉</div>';
+        } else {
+          if (regular.length)   taskBody += regular.map(renderTask).join('');
+          if (recurring.length) taskBody += '<div class="section-divider">↻ Recurring</div>' + recurring.map(renderTask).join('');
+          if (!regular.length && !recurring.length) taskBody = '<div class="empty">No active tasks 🎉</div>';
+        }
         html += '<div class="person-card">' +
           '<div class="person-header">' +
             '<div class="avatar" style="background:' + u.color + '">' + u.initials + '</div>' +
             '<div><div class="person-name">' + u.name + '</div>' +
-            '<div class="person-stats"><span class="badge">' + tasks.length + ' tasks</span>' +
+            '<div class="person-stats"><span class="badge">' + allU.length + ' tasks</span>' +
             (uO?'<span class="badge overdue">'+uO+' overdue</span>':'') +
             (uT?'<span class="badge today">'+uT+' today</span>':'') +
             (uD?'<span class="badge done">'+uD+' done</span>':'') +
             '</div></div></div>' +
-          '<div class="task-list">' + (tasks.length ? tasks.map(renderTask).join('') : '<div class="empty">No active tasks 🎉</div>') + '</div></div>';
+          '<div class="task-list">' + taskBody + '</div></div>';
       });
       if (unassigned.length) {
         html += '<div class="person-card">' +
