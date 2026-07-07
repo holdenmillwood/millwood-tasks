@@ -169,7 +169,7 @@
   async function doAssign(taskId, userId) {
     if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; }
     try {
-      await restApi('POST', '/tasks/' + taskId, { assignee_id: userId ? parseInt(userId) : null });
+      await restApi('POST', '/tasks/' + taskId, { responsible_uid: userId ? parseInt(userId) : null });
       loadData();
     } catch(e) { alert('Could not assign: ' + e.message); }
   }
@@ -188,7 +188,7 @@
 
   function renderTask(t) {
     const over = isOverdue(t), tod = isToday(t), due = formatDue(t);
-    const user = USERS[String(t.assignee_id || '')];
+    const user = USERS[String(t.responsible_uid || '')];
     return '<div class="task-item ' + (over?'is-overdue':'') + ' ' + (tod?'is-today':'') + '" id="ti-' + t.id + '">' +
       '<div class="task-check" onclick="event.stopPropagation();completeTask(\'' + t.id + '\')" title="Complete">✓</div>' +
       '<div class="task-body">' +
@@ -222,7 +222,7 @@
         '<div class="stat-card"><div class="stat-label">Completed Today</div><div class="stat-value done-v">' + doneTotal + '</div></div>';
       const byUser = {}, unassigned = [];
       allTasks.forEach(t => {
-        const uid = String(t.assignee_id || '');
+        const uid = String(t.responsible_uid || '');
         if (uid && USERS[uid]) { if (!byUser[uid]) byUser[uid]=[]; byUser[uid].push(t); }
         else unassigned.push(t);
       });
