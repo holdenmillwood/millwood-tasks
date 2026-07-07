@@ -201,15 +201,26 @@
       '</div></div>';
   }
 
+  async function fetchAllTasks() {
+    let allTasks = [], cursor = null;
+    do {
+      const url = '/tasks?project_id=' + PROJECT_ID + (cursor ? '&cursor=' + encodeURIComponent(cursor) : '');
+      const data = await restApi('GET', url);
+      const results = data?.results ?? (Array.isArray(data) ? data : []);
+      allTasks = allTasks.concat(results);
+      cursor = data?.next_cursor || null;
+    } while (cursor);
+    return allTasks;
+  }
+
   async function loadData() {
     document.getElementById('content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><div>Loading tasks…</div></div>';
     document.getElementById('statsRow').style.display = 'none';
     try {
-      const [tasks, completedToday] = await Promise.all([
-        restApi('GET', '/tasks?project_id=' + PROJECT_ID),
+      const [allTasks, completedToday] = await Promise.all([
+        fetchAllTasks(),
         fetchCompletedToday()
       ]);
-      const allTasks = (tasks?.results ?? tasks) || [];
       const overdueTotal = allTasks.filter(isOverdue).length;
       const todayTotal   = allTasks.filter(isToday).length;
       const doneTotal    = Object.values(completedToday).reduce((a,b)=>a+b,0);
