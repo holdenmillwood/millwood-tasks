@@ -91,18 +91,17 @@
 </head>
 <body>
 <div class="header">
-  <h1>🗂 Team Task Dashboard</h1>
+  <h1>&#128452; Team Task Dashboard</h1>
   <div class="header-right">
     <span class="last-updated" id="lastUpdated"></span>
-    <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+    <button class="refresh-btn" onclick="loadData()">&#8635; Refresh</button>
   </div>
 </div>
 <div id="statsRow" class="stats-row" style="display:none"></div>
 <div id="content">
-  <div class="loading-wrap"><div class="spinner"></div><div>Loading tasks…</div></div>
+  <div class="loading-wrap"><div class="spinner"></div><div>Loading tasks&#8230;</div></div>
 </div>
 <script>
-  // After deploying the Cloudflare Worker, paste its URL here:
   const WORKER_URL   = 'https://bold-lake-3329.holden-a49.workers.dev';
   const PROJECT_ID   = '6CrfXx4WRMGprc78';
   const USERS = {
@@ -155,7 +154,6 @@
   function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   let _statData = { overdue: [], today: [], completed: [] };
-
   let activeDropdown = null;
   document.addEventListener('click', () => { if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; } });
 
@@ -239,13 +237,13 @@
     const over = isOverdue(t), tod = isToday(t), due = formatDue(t);
     const user = USERS[String(t.responsible_uid || '')];
     return '<div class="task-item ' + (over?'is-overdue':'') + ' ' + (tod?'is-today':'') + '" id="ti-' + t.id + '">' +
-      '<div class="task-check" onclick="event.stopPropagation();completeTask(\'' + t.id + '\')" title="Complete">✓</div>' +
+      '<div class="task-check" onclick="event.stopPropagation();completeTask(\'' + t.id + '\')" title="Complete">&#10003;</div>' +
       '<div class="task-body">' +
         '<div class="task-content">' + esc(t.content) + '</div>' +
         '<div class="task-meta">' +
-          (due ? '<span class="task-due">' + (over?'⚠ ':tod?'📅 ':'') + due + '</span>' : '') +
+          (due ? '<span class="task-due">' + (over?'&#9888; ':tod?'&#128197; ':'') + due + '</span>' : '') +
           priorityBadge(t.priority) +
-          '<button class="assign-btn" onclick="event.stopPropagation();openAssignDropdown(\'' + t.id + '\',this)">' + esc(user?user.initials:'Assign') + ' ▾</button>' +
+          '<button class="assign-btn" onclick="event.stopPropagation();openAssignDropdown(\'' + t.id + '\',this)">' + esc(user?user.initials:'Assign') + ' &#9660;</button>' +
         '</div>' +
       '</div></div>';
   }
@@ -263,7 +261,7 @@
   }
 
   async function loadData() {
-    document.getElementById('content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><div>Loading tasks…</div></div>';
+    document.getElementById('content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><div>Loading tasks&#8230;</div></div>';
     document.getElementById('statsRow').style.display = 'none';
     try {
       const [allTasks, { counts: completedToday, items: completedItems }] = await Promise.all([
@@ -274,17 +272,18 @@
       const todayTotal   = allTasks.filter(isToday).length;
       const doneTotal    = Object.values(completedToday).reduce((a,b)=>a+b,0);
 
-      _statData.overdue   = allTasks.filter(isOverdue).map(t => ({ content: t.content, uid: String(t.responsible_uid||''), due: '⚠ Overdue · ' + formatDue(t) }));
-      _statData.today     = allTasks.filter(isToday).map(t =>   ({ content: t.content, uid: String(t.responsible_uid||''), due: '📅 Due today' }));
+      _statData.overdue   = allTasks.filter(isOverdue).map(t => ({ content: t.content, uid: String(t.responsible_uid||''), due: 'Overdue - ' + formatDue(t) }));
+      _statData.today     = allTasks.filter(isToday).map(t =>   ({ content: t.content, uid: String(t.responsible_uid||''), due: 'Due today' }));
       _statData.completed = completedItems.map(t => ({ content: t.content, uid: t.uid, due: '' }));
 
       const sr = document.getElementById('statsRow');
       sr.style.display = 'flex';
       sr.innerHTML =
         '<div class="stat-card"><div class="stat-label">Active Tasks</div><div class="stat-value">' + allTasks.length + '</div></div>' +
-        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup('overdue',this)"><div class="stat-label">Overdue ▾</div><div class="stat-value danger">' + overdueTotal + '</div></div>' +
-        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup('today',this)"><div class="stat-label">Due Today ▾</div><div class="stat-value today-v">' + todayTotal + '</div></div>' +
-        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup('completed',this)"><div class="stat-label">Completed Today ▾</div><div class="stat-value done-v">' + doneTotal + '</div></div>';
+        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup(\'overdue\',this)"><div class="stat-label">Overdue &#9660;</div><div class="stat-value danger">' + overdueTotal + '</div></div>' +
+        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup(\'today\',this)"><div class="stat-label">Due Today &#9660;</div><div class="stat-value today-v">' + todayTotal + '</div></div>' +
+        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup(\'completed\',this)"><div class="stat-label">Completed Today &#9660;</div><div class="stat-value done-v">' + doneTotal + '</div></div>';
+
       const byUser = {}, unassigned = [];
       allTasks.forEach(t => {
         const uid = String(t.responsible_uid || '');
@@ -303,11 +302,11 @@
         const uO=allU.filter(isOverdue).length, uT=allU.filter(isToday).length, uD=completedToday[uid]||0;
         let taskBody = '';
         if (!allU.length) {
-          taskBody = '<div class="empty">No active tasks 🎉</div>';
+          taskBody = '<div class="empty">No active tasks &#127881;</div>';
         } else {
           if (regular.length)   taskBody += regular.map(renderTask).join('');
-          if (recurring.length) taskBody += '<div class="section-divider">↻ Recurring</div>' + recurring.map(renderTask).join('');
-          if (!regular.length && !recurring.length) taskBody = '<div class="empty">No active tasks 🎉</div>';
+          if (recurring.length) taskBody += '<div class="section-divider">&#8635; Recurring</div>' + recurring.map(renderTask).join('');
+          if (!regular.length && !recurring.length) taskBody = '<div class="empty">No active tasks &#127881;</div>';
         }
         html += '<div class="person-card">' +
           '<div class="person-header">' +
@@ -330,7 +329,7 @@
       document.getElementById('content').innerHTML = html;
       document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     } catch(e) {
-      document.getElementById('content').innerHTML = '<div class="error-box"><strong>⚠ Could not load tasks</strong><br>' + esc(e.message) + '</div>';
+      document.getElementById('content').innerHTML = '<div class="error-box"><strong>&#9888; Could not load tasks</strong><br>' + esc(e.message) + '</div>';
     }
   }
 
