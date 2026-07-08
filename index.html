@@ -125,14 +125,18 @@
   async function fetchCompletedToday() {
     try {
       const since = today + 'T00:00:00';
-      const res = await fetch(WORKER_URL + '/api/v1/tasks/completed?project_id=' + PROJECT_ID + '&since=' + encodeURIComponent(since) + '&annotate_items=true&limit=200');
+      const res = await fetch(WORKER_URL + '/sync/v9/activity/get?event_type=completed&object_type=item&since=' + encodeURIComponent(since) + '&count=100&page=0');
       if (!res.ok) return { counts: {}, items: [] };
       const data = await res.json();
       const counts = {}, items = [];
-      (data.items || []).forEach(item => {
-        const uid = String(item.item_object?.responsible_uid || item.user_id || '');
-        if (uid) counts[uid] = (counts[uid] || 0) + 1;
-        items.push({ content: item.content, uid, completed_at: item.completed_at });
+      (data.events || []).forEach(event => {
+        if (String(event.parent_project_id) !== PROJECT_ID) return;
+        const uid = String(event.initiator_id || '');
+        const content = event.extra_data?.content || event.extra_data?.last_content || 'Task';
+        if (uid) {
+          counts[uid] = (counts[uid] || 0) + 1;
+          items.push({ content, uid, completed_at: event.event_date });
+        }
       });
       return { counts, items };
     } catch { return { counts: {}, items: [] }; }
