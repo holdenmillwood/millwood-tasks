@@ -60,21 +60,8 @@
     .assign-option { padding: 7px 10px; font-size: 12px; cursor: pointer; border-radius: 5px; display: flex; align-items: center; gap: 9px; color: var(--text); }
     .assign-option:hover { background: rgba(255,255,255,.07); }
     .assign-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .section-divider { padding: 6px 12px; font-size: 11px; color: var(--muted); letter-spacing: .5px; border-top: 1px solid var(--border); margin-top: 4px; }
     .empty { padding: 18px 14px; font-size: 12px; color: var(--muted); text-align: center; }
-    .section-divider { padding: 6px 12px 4px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; border-top: 1px solid var(--border); margin-top: 4px; }
-    .stat-card.clickable { cursor: pointer; transition: background .15s; }
-    .stat-card.clickable:hover { background: var(--card2); }
-    .stat-popup { position: fixed; z-index: 300; background: #1e2130; border: 1px solid var(--border); border-radius: 12px; min-width: 280px; max-width: 360px; max-height: 420px; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,.6); padding: 6px 0; }
-    .stat-popup::-webkit-scrollbar { width: 4px; }
-    .stat-popup::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-    .stat-popup-item { padding: 9px 14px; display: flex; align-items: flex-start; gap: 10px; border-radius: 7px; margin: 0 4px; }
-    .stat-popup-item:hover { background: rgba(255,255,255,.04); }
-    .stat-popup-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
-    .stat-popup-text { flex: 1; min-width: 0; }
-    .stat-popup-name { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
-    .stat-popup-content { font-size: 12px; line-height: 1.4; word-break: break-word; }
-    .stat-popup-due { font-size: 10px; color: var(--muted); margin-top: 2px; }
-    .stat-popup-empty { padding: 16px 14px; font-size: 12px; color: var(--muted); text-align: center; }
     .loading-wrap { display: flex; flex-direction: column; align-items: center; padding: 80px 0; color: var(--muted); gap: 14px; }
     .spinner { width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .75s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -91,19 +78,19 @@
 </head>
 <body>
 <div class="header">
-  <h1>&#128452; Team Task Dashboard</h1>
+  <h1>Team Task Dashboard</h1>
   <div class="header-right">
     <span class="last-updated" id="lastUpdated"></span>
-    <button class="refresh-btn" onclick="loadData()">&#8635; Refresh</button>
+    <button class="refresh-btn" onclick="loadData()">Refresh</button>
   </div>
 </div>
 <div id="statsRow" class="stats-row" style="display:none"></div>
 <div id="content">
-  <div class="loading-wrap"><div class="spinner"></div><div>Loading tasks&#8230;</div></div>
+  <div class="loading-wrap"><div class="spinner"></div><div>Loading tasks...</div></div>
 </div>
 <script>
-  const WORKER_URL   = 'https://bold-lake-3329.holden-a49.workers.dev';
-  const PROJECT_ID   = '6CrfXx4WRMGprc78';
+  const WORKER_URL = 'https://bold-lake-3329.holden-a49.workers.dev';
+  const PROJECT_ID = '6CrfXx4WRMGprc78';
   const USERS = {
     '40811159': { name: 'Holden Gilstrap',  initials: 'HG',  color: '#f72585' },
     '49999808': { name: 'Jared Childs',     initials: 'JC',  color: '#0096c7' },
@@ -113,13 +100,34 @@
   };
   const today = new Date().toISOString().split('T')[0];
 
-  async function restApi(method, path, body) {
-    const opts = { method, headers: { 'Content-Type': 'application/json' } };
-    if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(WORKER_URL + '/api/v1' + path, opts);
+  async function apiGet(path) {
+    const res = await fetch(WORKER_URL + path);
     if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
     if (res.status === 204) return null;
     return res.json();
+  }
+
+  async function apiPost(path, body) {
+    const res = await fetch(WORKER_URL + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+    if (res.status === 204) return null;
+    return res.json();
+  }
+
+  async function fetchAllTasks() {
+    let all = [], cursor = null;
+    do {
+      const url = '/api/v1/tasks?project_id=' + PROJECT_ID + (cursor ? '&cursor=' + encodeURIComponent(cursor) : '');
+      const data = await apiGet(url);
+      const results = data && data.results ? data.results : (Array.isArray(data) ? data : []);
+      all = all.concat(results);
+      cursor = (data && data.next_cursor) || null;
+    } while (cursor);
+    return all;
   }
 
   async function fetchCompletedToday() {
@@ -128,83 +136,55 @@
       if (!res.ok) return {};
       const items = await res.json();
       const counts = {};
-      (items || []).forEach(item => {
-        const uid = String(item.responsible_uid || item.user_id || '');
-        if (uid) counts[uid] = (counts[uid] || 0) + 1;
-      });
+      if (Array.isArray(items)) {
+        items.forEach(function(item) {
+          const uid = String(item.responsible_uid || item.user_id || '');
+          if (uid) counts[uid] = (counts[uid] || 0) + 1;
+        });
+      }
       return counts;
-    } catch { return {}; }
+    } catch (e) { return {}; }
   }
 
   function isOverdue(t) { return t.due && t.due.date < today; }
   function isToday(t)   { return t.due && t.due.date === today; }
   function formatDue(t) {
     if (!t.due) return '';
-    const [y,m,d] = t.due.date.split('-').map(Number);
-    return new Date(y,m-1,d).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    var parts = t.due.date.split('-').map(Number);
+    return new Date(parts[0], parts[1]-1, parts[2]).toLocaleDateString('en-US', {month:'short', day:'numeric'});
   }
   function priorityBadge(p) {
-    if (p===4) return '<span class="task-priority p1">P1</span>';
-    if (p===3) return '<span class="task-priority p2">P2</span>';
-    if (p===2) return '<span class="task-priority p3">P3</span>';
+    if (p === 4) return '<span class="task-priority p1">P1</span>';
+    if (p === 3) return '<span class="task-priority p2">P2</span>';
+    if (p === 2) return '<span class="task-priority p3">P3</span>';
     return '';
   }
-  function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>\/g,'&gt;').replace(/"/g,'&quot;'); }
 
-  let _statData = { overdue: [], today: [], completed: [] };
-  let activeDropdown = null;
-  document.addEventListener('click', () => { if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; } });
-
-  function openStatPopup(type, cardEl) {
-    if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; return; }
-    const tasks = _statData[type] || [];
-    const dd = document.createElement('div');
-    dd.className = 'stat-popup';
-    dd.addEventListener('click', e => e.stopPropagation());
-    if (!tasks.length) {
-      dd.innerHTML = '<div class="stat-popup-empty">Nothing here</div>';
-    } else {
-      tasks.forEach(t => {
-        const user = USERS[t.uid];
-        const color = user ? user.color : '#555';
-        const name  = user ? user.name  : 'Unassigned';
-        const item  = document.createElement('div');
-        item.className = 'stat-popup-item';
-        item.innerHTML =
-          '<div class="stat-popup-dot" style="background:' + color + '"></div>' +
-          '<div class="stat-popup-text">' +
-            '<div class="stat-popup-name">' + esc(name) + '</div>' +
-            '<div class="stat-popup-content">' + esc(t.content) + '</div>' +
-            (t.due ? '<div class="stat-popup-due">' + t.due + '</div>' : '') +
-          '</div>';
-        dd.appendChild(item);
-      });
-    }
-    const rect = cardEl.getBoundingClientRect();
-    dd.style.top  = (rect.bottom + 6) + 'px';
-    dd.style.left = Math.min(rect.left, window.innerWidth - 370) + 'px';
-    document.body.appendChild(dd);
-    activeDropdown = dd;
-  }
+  var activeDropdown = null;
+  document.addEventListener('click', function() {
+    if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; }
+  });
 
   function openAssignDropdown(taskId, btnEl) {
     if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; return; }
-    const dd = document.createElement('div');
+    var dd = document.createElement('div');
     dd.className = 'assign-dropdown';
-    dd.addEventListener('click', e => e.stopPropagation());
-    const rect = btnEl.getBoundingClientRect();
+    dd.addEventListener('click', function(e) { e.stopPropagation(); });
+    var rect = btnEl.getBoundingClientRect();
     dd.style.top  = Math.min(rect.bottom + 4, window.innerHeight - 220) + 'px';
     dd.style.left = rect.left + 'px';
-    const unassign = document.createElement('div');
+    var unassign = document.createElement('div');
     unassign.className = 'assign-option';
     unassign.innerHTML = '<span class="assign-dot" style="background:#555"></span> Unassign';
-    unassign.onclick = () => doAssign(taskId, null);
+    unassign.onclick = function() { doAssign(taskId, null); };
     dd.appendChild(unassign);
-    Object.entries(USERS).forEach(([uid, u]) => {
-      const opt = document.createElement('div');
+    Object.entries(USERS).forEach(function(entry) {
+      var uid = entry[0], u = entry[1];
+      var opt = document.createElement('div');
       opt.className = 'assign-option';
       opt.innerHTML = '<span class="assign-dot" style="background:' + u.color + '"></span> ' + u.name;
-      opt.onclick = () => doAssign(taskId, uid);
+      opt.onclick = function() { doAssign(taskId, uid); };
       dd.appendChild(opt);
     });
     document.body.appendChild(dd);
@@ -214,16 +194,16 @@
   async function doAssign(taskId, userId) {
     if (activeDropdown) { activeDropdown.remove(); activeDropdown = null; }
     try {
-      await restApi('POST', '/tasks/' + taskId, { responsible_uid: userId ? parseInt(userId) : null });
+      await apiPost('/api/v1/tasks/' + taskId, { responsible_uid: userId ? parseInt(userId) : null });
       loadData();
     } catch(e) { alert('Could not assign: ' + e.message); }
   }
 
   async function completeTask(taskId) {
-    const el = document.getElementById('ti-' + taskId);
+    var el = document.getElementById('ti-' + taskId);
     if (el) el.classList.add('completing');
     try {
-      await restApi('POST', '/tasks/' + taskId + '/close');
+      await apiPost('/api/v1/tasks/' + taskId + '/close', {});
       if (el) el.remove();
     } catch(e) {
       if (el) el.classList.remove('completing');
@@ -231,109 +211,106 @@
     }
   }
 
+  function sortFn(a, b) {
+    var ao = isOverdue(a), bo = isOverdue(b), at = isToday(a), bt = isToday(b);
+    if (ao !== bo) return ao ? -1 : 1;
+    if (at !== bt) return at ? -1 : 1;
+    return b.priority - a.priority;
+  }
+
   function renderTask(t) {
-    const over = isOverdue(t), tod = isToday(t), due = formatDue(t);
-    const user = USERS[String(t.responsible_uid || '')];
-    return '<div class="task-item ' + (over?'is-overdue':'') + ' ' + (tod?'is-today':'') + '" id="ti-' + t.id + '">' +
+    var over = isOverdue(t), tod = isToday(t), due = formatDue(t);
+    var uid = String(t.responsible_uid || '');
+    var user = USERS[uid];
+    return '<div class="task-item ' + (over ? 'is-overdue' : '') + ' ' + (tod ? 'is-today' : '') + '" id="ti-' + t.id + '">' +
       '<div class="task-check" onclick="event.stopPropagation();completeTask(\'' + t.id + '\')" title="Complete">&#10003;</div>' +
       '<div class="task-body">' +
         '<div class="task-content">' + esc(t.content) + '</div>' +
         '<div class="task-meta">' +
-          (due ? '<span class="task-due">' + (over?'&#9888; ':tod?'&#128197; ':'') + due + '</span>' : '') +
+          (due ? '<span class="task-due">' + (over ? '! ' : tod ? 'Today ' : '') + due + '</span>' : '') +
           priorityBadge(t.priority) +
-          '<button class="assign-btn" onclick="event.stopPropagation();openAssignDropdown(\'' + t.id + '\',this)">' + esc(user?user.initials:'Assign') + ' &#9660;</button>' +
+          '<button class="assign-btn" onclick="event.stopPropagation();openAssignDropdown(\'' + t.id + '\',this)">' + esc(user ? user.initials : 'Assign') + ' v</button>' +
         '</div>' +
       '</div></div>';
   }
 
-  async function fetchAllTasks() {
-    let allTasks = [], cursor = null;
-    do {
-      const url = '/tasks?project_id=' + PROJECT_ID + (cursor ? '&cursor=' + encodeURIComponent(cursor) : '');
-      const data = await restApi('GET', url);
-      const results = data?.results ?? (Array.isArray(data) ? data : []);
-      allTasks = allTasks.concat(results);
-      cursor = data?.next_cursor || null;
-    } while (cursor);
-    return allTasks;
-  }
-
   async function loadData() {
-    document.getElementById('content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><div>Loading tasks&#8230;</div></div>';
+    document.getElementById('content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><div>Loading tasks...</div></div>';
     document.getElementById('statsRow').style.display = 'none';
     try {
-      const [allTasks, { counts: completedToday, items: completedItems }] = await Promise.all([
-        fetchAllTasks(),
-        fetchCompletedToday()
-      ]);
-      const overdueTotal = allTasks.filter(isOverdue).length;
-      const todayTotal   = allTasks.filter(isToday).length;
-      const doneTotal    = Object.values(completedToday).reduce((a,b)=>a+b,0);
+      var results = await Promise.all([fetchAllTasks(), fetchCompletedToday()]);
+      var allTasks = results[0] || [];
+      var completedToday = results[1] || {};
 
-      _statData.overdue   = allTasks.filter(isOverdue).map(t => ({ content: t.content, uid: String(t.responsible_uid||''), due: 'Overdue - ' + formatDue(t) }));
-      _statData.today     = allTasks.filter(isToday).map(t =>   ({ content: t.content, uid: String(t.responsible_uid||''), due: 'Due today' }));
-      _statData.completed = completedItems.map(t => ({ content: t.content, uid: t.uid, due: '' }));
+      var overdueTotal = allTasks.filter(isOverdue).length;
+      var todayTotal   = allTasks.filter(isToday).length;
+      var doneTotal    = Object.values(completedToday).reduce(function(a,b){return a+b;}, 0);
 
-      const sr = document.getElementById('statsRow');
+      var sr = document.getElementById('statsRow');
       sr.style.display = 'flex';
       sr.innerHTML =
         '<div class="stat-card"><div class="stat-label">Active Tasks</div><div class="stat-value">' + allTasks.length + '</div></div>' +
-        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup(\'overdue\',this)"><div class="stat-label">Overdue &#9660;</div><div class="stat-value danger">' + overdueTotal + '</div></div>' +
-        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup(\'today\',this)"><div class="stat-label">Due Today &#9660;</div><div class="stat-value today-v">' + todayTotal + '</div></div>' +
-        '<div class="stat-card clickable" onclick="event.stopPropagation();openStatPopup(\'completed\',this)"><div class="stat-label">Completed Today &#9660;</div><div class="stat-value done-v">' + doneTotal + '</div></div>';
+        '<div class="stat-card"><div class="stat-label">Overdue</div><div class="stat-value danger">' + overdueTotal + '</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Due Today</div><div class="stat-value today-v">' + todayTotal + '</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Completed Today</div><div class="stat-value done-v">' + doneTotal + '</div></div>';
 
-      const byUser = {}, unassigned = [];
-      allTasks.forEach(t => {
-        const uid = String(t.responsible_uid || '');
-        if (uid && USERS[uid]) { if (!byUser[uid]) byUser[uid]=[]; byUser[uid].push(t); }
-        else unassigned.push(t);
-      });
-      let html = '<div class="grid">';
-      Object.entries(USERS).forEach(([uid, u]) => {
-        const sortFn = (a,b) => {
-          const ao=isOverdue(a),bo=isOverdue(b),at=isToday(a),bt=isToday(b);
-          if(ao!==bo) return ao?-1:1; if(at!==bt) return at?-1:1; return b.priority-a.priority;
-        };
-        const allU = (byUser[uid]||[]);
-        const regular   = allU.filter(t => !t.due?.is_recurring).sort(sortFn);
-        const recurring = allU.filter(t =>  t.due?.is_recurring).sort(sortFn);
-        const uO=allU.filter(isOverdue).length, uT=allU.filter(isToday).length, uD=completedToday[uid]||0;
-        let taskBody = '';
-        if (!allU.length) {
-          taskBody = '<div class="empty">No active tasks &#127881;</div>';
+      var byUser = {}, unassigned = [];
+      allTasks.forEach(function(t) {
+        var uid = String(t.responsible_uid || '');
+        if (uid && USERS[uid]) {
+          if (!byUser[uid]) byUser[uid] = [];
+          byUser[uid].push(t);
         } else {
-          if (regular.length)   taskBody += regular.map(renderTask).join('');
-          if (recurring.length) taskBody += '<div class="section-divider">&#8635; Recurring</div>' + recurring.map(renderTask).join('');
-          if (!regular.length && !recurring.length) taskBody = '<div class="empty">No active tasks &#127881;</div>';
+          unassigned.push(t);
         }
+      });
+
+      var html = '<div class="grid">';
+      Object.entries(USERS).forEach(function(entry) {
+        var uid = entry[0], u = entry[1];
+        var tasks = (byUser[uid] || []).sort(sortFn);
+        var regular   = tasks.filter(function(t){ return !t.due || !t.due.is_recurring; });
+        var recurring = tasks.filter(function(t){ return t.due && t.due.is_recurring; });
+        var uO = tasks.filter(isOverdue).length;
+        var uT = tasks.filter(isToday).length;
+        var uD = completedToday[uid] || 0;
         html += '<div class="person-card">' +
           '<div class="person-header">' +
             '<div class="avatar" style="background:' + u.color + '">' + u.initials + '</div>' +
             '<div><div class="person-name">' + u.name + '</div>' +
-            '<div class="person-stats"><span class="badge">' + allU.length + ' tasks</span>' +
-            (uO?'<span class="badge overdue">'+uO+' overdue</span>':'') +
-            (uT?'<span class="badge today">'+uT+' today</span>':'') +
-            (uD?'<span class="badge done">'+uD+' done</span>':'') +
+            '<div class="person-stats"><span class="badge">' + tasks.length + ' tasks</span>' +
+            (uO ? '<span class="badge overdue">' + uO + ' overdue</span>' : '') +
+            (uT ? '<span class="badge today">' + uT + ' today</span>' : '') +
+            (uD ? '<span class="badge done">' + uD + ' done</span>' : '') +
             '</div></div></div>' +
-          '<div class="task-list">' + taskBody + '</div></div>';
+          '<div class="task-list">';
+        if (tasks.length === 0) {
+          html += '<div class="empty">No active tasks</div>';
+        } else {
+          html += regular.map(renderTask).join('');
+          if (recurring.length) {
+            html += '<div class="section-divider">Recurring</div>' + recurring.map(renderTask).join('');
+          }
+        }
+        html += '</div></div>';
       });
+
       if (unassigned.length) {
         html += '<div class="person-card">' +
           '<div class="person-header"><div class="avatar" style="background:#444">?</div>' +
           '<div><div class="person-name">Unassigned</div><div class="person-stats"><span class="badge">' + unassigned.length + ' tasks</span></div></div></div>' +
-          '<div class="task-list">' + unassigned.map(renderTask).join('') + '</div></div>';
+          '<div class="task-list">' + unassigned.sort(sortFn).map(renderTask).join('') + '</div></div>';
       }
       html += '</div>';
       document.getElementById('content').innerHTML = html;
-      document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+      document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
     } catch(e) {
-      document.getElementById('content').innerHTML = '<div class="error-box"><strong>&#9888; Could not load tasks</strong><br>' + esc(e.message) + '</div>';
+      document.getElementById('content').innerHTML = '<div class="error-box"><strong>Could not load tasks</strong><br>' + esc(e.message) + '</div>';
     }
   }
 
   window.completeTask = completeTask;
   window.openAssignDropdown = openAssignDropdown;
-  window.openStatPopup = openStatPopup;
   loadData();
   setInterval(loadData, 30000);
 </script>
