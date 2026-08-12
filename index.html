@@ -66,6 +66,27 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .spinner { width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .75s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .error-box { background: rgba(255,71,87,.08); border: 1px solid rgba(255,71,87,.3); border-radius: 10px; padding: 14px 18px; color: var(--danger); font-size: 13px; margin: 20px 24px; }
+.comment-btn { font-size: 11px; color: var(--muted); background: none; border: none; padding: 1px 5px; cursor: pointer; opacity: 0.5; transition: opacity .15s; line-height: 1; }
+.comment-btn:hover { opacity: 1; color: var(--accent); }
+.comment-btn.has-comments { opacity: 0.8; color: var(--accent); }
+.cm-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 300; align-items: center; justify-content: center; }
+.cm-modal-overlay.open { display: flex; }
+.cm-modal { background: var(--card); border: 1px solid var(--border); border-radius: 14px; width: 480px; max-width: calc(100vw - 32px); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.2); }
+.cm-modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.cm-modal-title { font-size: 14px; font-weight: 600; line-height: 1.4; }
+.cm-modal-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--muted); line-height: 1; padding: 0 2px; flex-shrink: 0; }
+.cm-modal-close:hover { color: var(--text); }
+.cm-comments-list { flex: 1; overflow-y: auto; padding: 14px 20px; display: flex; flex-direction: column; gap: 12px; }
+.cm-comment { background: var(--card2); border-radius: 8px; padding: 10px 13px; }
+.cm-comment-author { font-size: 11px; font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+.cm-comment-text { font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+.cm-comment-time { font-size: 10px; color: var(--muted); margin-top: 4px; }
+.cm-empty { font-size: 13px; color: var(--muted); text-align: center; padding: 24px 0; }
+.cm-modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-end; }
+.cm-textarea { flex: 1; background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 13px; color: var(--text); resize: none; font-family: inherit; min-height: 60px; outline: none; transition: border-color .15s; }
+.cm-textarea:focus { border-color: var(--accent); }
+.cm-post-btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: opacity .15s; }
+.cm-post-btn:disabled { opacity: 0.5; cursor: default; }
 @media (max-width: 600px) {
 .stats-row { flex-wrap: wrap; padding: 12px; gap: 8px; }
 .stat-card { min-width: calc(50% - 4px); flex: none; padding: 10px 14px; }
@@ -87,6 +108,21 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 <div id="statsRow" class="stats-row" style="display:none"></div>
 <div id="content">
 <div class="loading-wrap"><div class="spinner"></div><div>Loading tasks...</div></div>
+</div>
+
+<!-- Comment Modal -->
+<div class="cm-modal-overlay" id="cmOverlay" onclick="if(event.target===this)closeComments()">
+  <div class="cm-modal">
+    <div class="cm-modal-header">
+      <div class="cm-modal-title" id="cmTitle"></div>
+      <button class="cm-modal-close" onclick="closeComments()">&#x2715;</button>
+    </div>
+    <div class="cm-comments-list" id="cmList"><div class="cm-empty">Loading…</div></div>
+    <div class="cm-modal-footer">
+      <textarea class="cm-textarea" id="cmInput" placeholder="Add a comment…" rows="2" onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))postComment()"></textarea>
+      <button class="cm-post-btn" id="cmPostBtn" onclick="postComment()">Post</button>
+    </div>
+  </div>
 </div>
 <script>
 const WORKER_URL = 'https://bold-lake-3329.holden-a49.workers.dev';
@@ -234,10 +270,58 @@ return '<div class="task-item ' + (over ? 'is-overdue' : '') + ' ' + (tod ? 'is-
 (due ? '<span class="task-due">' + (over ? '! ' : tod ? 'Today ' : '') + due + '</span>' : '') +
 priorityBadge(t.priority) +
 '<button class="assign-btn" onclick="event.stopPropagation();openAssignDropdown(\'' + t.id + '\',this)">' + esc(user ? user.initials : 'Assign') + ' v</button>' +
+'<button class="comment-btn" id="cb-' + t.id + '" onclick="event.stopPropagation();openComments(\'' + t.id + '\',\'' + esc(t.content).replace(/\x27/g,"\'\'") + '\')" title="Comments">&#128172;</button>' +
 '</div>' +
 '</div></div>';
 }
 
+
+// Comment modal
+var cmTaskId = null;
+async function openComments(taskId, taskTitle) {
+  cmTaskId = taskId;
+  document.getElementById('cmTitle').textContent = taskTitle;
+  document.getElementById('cmList').innerHTML = '<div class="cm-empty">Loading…</div>';
+  document.getElementById('cmInput').value = '';
+  document.getElementById('cmPostBtn').disabled = false;
+  document.getElementById('cmOverlay').classList.add('open');
+  await loadComments(taskId);
+}
+function closeComments() {
+  document.getElementById('cmOverlay').classList.remove('open');
+  cmTaskId = null;
+}
+async function loadComments(taskId) {
+  try {
+    var data = await apiGet('/api/v1/comments?task_id=' + taskId);
+    var comments = Array.isArray(data) ? data : (data.results || []);
+    var list = document.getElementById('cmList');
+    if (!comments.length) { list.innerHTML = '<div class="cm-empty">No comments yet.</div>'; return; }
+    comments.sort(function(a,b){ return new Date(a.posted_at)-new Date(b.posted_at); });
+    list.innerHTML = comments.map(function(c) {
+      var uid = String(c.posted_uid||c.user_id||'');
+      var author = (USERS[uid]&&USERS[uid].name)||'Unknown';
+      var time = c.posted_at ? new Date(c.posted_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+      return '<div class="cm-comment"><div class="cm-comment-author">'+esc(author)+'</div><div class="cm-comment-text">'+esc(c.content)+'</div>'+(time?'<div class="cm-comment-time">'+time+'</div>':'')+ '</div>';
+    }).join('');
+    list.scrollTop = list.scrollHeight;
+    var btn = document.getElementById('cb-'+taskId);
+    if (btn) btn.classList.add('has-comments');
+  } catch(e) { document.getElementById('cmList').innerHTML = '<div class="cm-empty">Failed to load.</div>'; }
+}
+async function postComment() {
+  var input = document.getElementById('cmInput');
+  var text = input.value.trim();
+  if (!text||!cmTaskId) return;
+  var btn = document.getElementById('cmPostBtn');
+  btn.disabled = true;
+  try {
+    var resp = await fetch(WORKER_URL+'/api/v1/comments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task_id:cmTaskId,content:text})});
+    if (resp.ok) { input.value=''; await loadComments(cmTaskId); }
+    else alert('Failed to post comment.');
+  } catch(e) { alert('Error posting comment.'); }
+  btn.disabled = false;
+}
 async function loadData() {
 document.getElementById('content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><div>Loading tasks...</div></div>';
 document.getElementById('statsRow').style.display = 'none';
