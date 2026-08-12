@@ -178,7 +178,7 @@ const items = await res.json();
 const counts = {};
 if (Array.isArray(items)) {
 items.forEach(function(item) {
-const uid = String(item.user_id || item.responsible_uid || '');
+const uid = String(item.completed_by_uid || item.user_id || item.responsible_uid || '');
 if (uid) counts[uid] = (counts[uid] || 0) + 1;
 });
 }
